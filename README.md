@@ -9,6 +9,13 @@ or bulk-move worker:
 
 - PostgreSQL runs as a Docker Compose service with a persistent volume and a
   `pg_isready` container health check.
+- Sequelize is configured as the application's PostgreSQL ORM with schema
+  synchronization disabled. Its pool is capped at nine connections; the
+  separate health-check `pg` pool is capped at one. Sequelize CLI runs versioned
+  CommonJS migrations.
+- The initial migration creates the seven tenant-scoped domain tables,
+  composite workspace/pipeline foreign keys, job/item state constraints, and
+  indexes used for stage listing, job claims, and pending-item chunk reads.
 - `src/common/postgres` owns the shared PostgreSQL connection pool and closes it
   during application shutdown. The app enables Nest shutdown hooks so SIGINT
   and SIGTERM run lifecycle hooks and close the pool cleanly.
@@ -20,9 +27,9 @@ or bulk-move worker:
   third-party logging framework.
 - Environment variables are validated at startup.
 
-Opportunity endpoints, database schema/migrations, bulk jobs, seeding, and
-benchmarks are intentionally not implemented yet. They will follow a design
-review so the core job semantics are settled before coding.
+Opportunity endpoints, Sequelize domain models, bulk worker behavior, seeding,
+and benchmarks are not implemented yet. They will follow the reviewed design
+in short, verifiable steps.
 
 ## Requirements
 
@@ -34,10 +41,14 @@ review so the core job semantics are settled before coding.
 
 ```bash
 cp -n .env.example .env
-docker compose up -d postgres
+docker compose up -d --wait postgres
 npm install
+npm run db:migrate
 npm run start:dev
 ```
+
+`npm run db:migrate` loads the local `.env` and applies all pending migrations.
+Use `npm run db:migrate:undo` to roll back the most recently applied migration.
 
 In another terminal, check liveness and readiness separately:
 

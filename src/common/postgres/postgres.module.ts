@@ -18,7 +18,7 @@ import { PostgresPoolLifecycle } from './postgres-pool-lifecycle';
       useFactory: (configuration: ApplicationConfiguration) =>
         new Pool({
           ...configuration.postgres,
-          max: 10,
+          max: 1,
           connectionTimeoutMillis: 5_000,
         }),
     },
