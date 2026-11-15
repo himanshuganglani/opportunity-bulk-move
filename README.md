@@ -4,8 +4,8 @@ Backend take-home project built with NestJS, TypeScript, and PostgreSQL.
 
 ## Current setup
 
-This phase establishes shared infrastructure before designing the opportunity API
-or bulk-move worker:
+This phase provides the PostgreSQL foundation, opportunity creation and listing,
+and deterministic seed data before implementing the bulk-move worker:
 
 - PostgreSQL runs as a Docker Compose service with a persistent volume and a
   `pg_isready` container health check.
@@ -27,9 +27,10 @@ or bulk-move worker:
   third-party logging framework.
 - Environment variables are validated at startup.
 
-Opportunity endpoints, Sequelize domain models, bulk worker behavior, seeding,
-and benchmarks are not implemented yet. They will follow the reviewed design
-in short, verifiable steps.
+The current API supports opportunity creation and paginated listing by stage.
+Deterministic small and performance-scale seed commands are available. Manual
+stage moves, bulk job submission/processing, and benchmarks are not implemented
+yet.
 
 ## Requirements
 
@@ -44,11 +45,60 @@ cp -n .env.example .env
 docker compose up -d --wait postgres
 npm install
 npm run db:migrate
+npm run db:seed:small
 npm run start:dev
 ```
 
 `npm run db:migrate` loads the local `.env` and applies all pending migrations.
 Use `npm run db:migrate:undo` to roll back the most recently applied migration.
+The small seed is safe to rerun: it inserts deterministic IDs and does not
+delete or overwrite existing records. For the performance dataset, after
+migrations run:
+
+```bash
+npm run db:seed:large
+```
+
+The large seed creates one primary pipeline with 500,000 opportunities across
+12 unevenly populated stages, with fixed creation dates spanning approximately
+18 months; five separate workspaces receive 3,000 opportunities each. The main
+workspace also has a secondary pipeline to exercise pipeline scoping. The small
+seed creates the same topology with 100 primary-pipeline opportunities, 20
+secondary-pipeline opportunities, and 25 opportunities in each of the five
+other workspaces. Both seed modes use deterministic workspace, pipeline, stage,
+and opportunity IDs; inserts are set-based in PostgreSQL and use conflict-safe
+insertion. Seed data and distributions are in `database/seed.sql`; a small Node
+runner selects the mode and executes that SQL with the configured PostgreSQL
+connection, so `psql` is not required. The SQL seed prints each seeded
+workspace, pipeline, and stage ID for API testing. On a clean database, the
+small mode creates the small counts above; the large mode creates the
+performance counts above. Switching from large back to small does not delete
+or shrink data. The large seed is intentionally separate from default startup.
+
+## Opportunity API
+
+All opportunity routes require `X-Workspace-Id`. This header scopes tenant data
+and is not authentication or authorization.
+
+Create an opportunity with `POST /pipelines/:pipelineId/opportunities`:
+
+```json
+{
+  "name": "Example opportunity",
+  "value": "1250.00",
+  "status": "open",
+  "ownerId": "owner-1",
+  "stageId": "a-stage-uuid"
+}
+```
+
+List a pipeline stage with
+`GET /pipelines/:pipelineId/opportunities?stageId=<uuid>&limit=50&cursor=<cursor>`.
+`stageId` is required. The optional cursor is opaque and stable for records
+ordered by creation timestamp and ID; the default page size is 50 and the
+maximum is 100. Creation validates that the stage belongs to both the supplied
+workspace and pipeline. Listing validates the same relationship and scopes the
+opportunity query by workspace, pipeline, and stage.
 
 In another terminal, check liveness and readiness separately:
 
@@ -95,6 +145,6 @@ npm run lint
 
 ## Shared modules
 
-Import `CommonModule` to reuse the PostgreSQL pool, health check, and logger in
-future modules. The pool is capped at ten connections for now; revisit this
-alongside the workload and connection budget during design review.
+`CommonModule` provides the Sequelize database module, health check, logging,
+and PostgreSQL readiness pool. The Sequelize pool allows up to nine
+connections; the separate health-check pool allows one.

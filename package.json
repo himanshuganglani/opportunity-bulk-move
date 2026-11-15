@@ -10,6 +10,8 @@
     "deploy": "nest deploy",
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
+    "db:seed:small": "node database/seed.cjs small",
+    "db:seed:large": "node database/seed.cjs large",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
