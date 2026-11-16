@@ -10,6 +10,7 @@ import { QueryTypes, Sequelize } from 'sequelize';
 import { BulkMoveJob } from '../../common/models/bulk-move-job.model';
 import { OPPORTUNITY_STATUSES } from '../../common/models/model.types';
 import { Stage } from '../../common/models/stage.model';
+import { isUuidFormat, uuidFormatError } from '../../common/validation/uuid';
 import type {
   BulkMoveFilters,
   BulkMoveProgress,
@@ -18,8 +19,6 @@ import type {
   SubmitBulkMoveInput,
 } from './bulk-moves.types';
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MONEY_PATTERN = /^-?(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/;
 const UTC_TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z$/;
@@ -391,8 +390,8 @@ export class BulkMovesService {
   }
 
   private requireUuid(value: unknown, field: string): string {
-    if (typeof value !== 'string' || !UUID_PATTERN.test(value)) {
-      throw new BadRequestException(`${field} must be a UUID`);
+    if (!isUuidFormat(value)) {
+      throw new BadRequestException(uuidFormatError(field));
     }
     return value.toLowerCase();
   }

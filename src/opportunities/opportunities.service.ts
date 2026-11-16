@@ -8,6 +8,7 @@ import { Op, Sequelize, col, literal } from 'sequelize';
 import { Opportunity } from '../common/models/opportunity.model';
 import { Stage } from '../common/models/stage.model';
 import { StageTransition } from '../common/models/stage-transition.model';
+import { isUuidFormat, uuidFormatError } from '../common/validation/uuid';
 import {
   OPPORTUNITY_STATUSES,
   type OpportunityStatus,
@@ -24,8 +25,6 @@ interface PageCursor {
   id: string;
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MONEY_PATTERN = /^-?(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/;
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -181,7 +180,9 @@ export class OpportunitiesService {
       });
 
       if (!destinationStage) {
-        throw new NotFoundException('Pipeline or stage not found in workspace');
+        throw new NotFoundException(
+          'Destination stage not found in workspace and pipeline',
+        );
       }
 
       const opportunity = await this.opportunityModel.findOne({
@@ -225,8 +226,8 @@ export class OpportunitiesService {
   }
 
   private requireUuid(value: string | undefined, field: string): string {
-    if (!value || !UUID_PATTERN.test(value)) {
-      throw new BadRequestException(`${field} must be a UUID`);
+    if (!isUuidFormat(value)) {
+      throw new BadRequestException(uuidFormatError(field));
     }
     return value.toLowerCase();
   }
@@ -307,7 +308,7 @@ export class OpportunitiesService {
         !('id' in parsed) ||
         typeof parsed.createdAt !== 'string' ||
         typeof parsed.id !== 'string' ||
-        !UUID_PATTERN.test(parsed.id) ||
+        !isUuidFormat(parsed.id) ||
         !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(
           parsed.createdAt,
         ) ||

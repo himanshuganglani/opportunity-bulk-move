@@ -30,6 +30,12 @@ import type { ApplicationConfiguration } from '../../config/env.validation';
         username: configuration.postgres.user,
         password: configuration.postgres.password,
         database: configuration.postgres.database,
+        pool: {
+          max: configuration.postgres.poolMax,
+          min: 0,
+          acquire: 30_000,
+          idle: 10_000,
+        },
         models: [
           Workspace,
           Pipeline,
@@ -42,12 +48,6 @@ import type { ApplicationConfiguration } from '../../config/env.validation';
         autoLoadModels: false,
         synchronize: false,
         logging: false,
-        pool: {
-          max: 9,
-          min: 0,
-          acquire: 30_000,
-          idle: 10_000,
-        },
       }),
     }),
   ],

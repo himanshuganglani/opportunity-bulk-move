@@ -185,11 +185,15 @@ describe('OpportunitiesController', () => {
   });
 
   it('rejects malformed route UUIDs before reaching the service', async () => {
-    await request(app.getHttpServer())
+    const invalidPipelineResponse = await request(app.getHttpServer())
       .get('/pipelines/not-a-uuid/opportunities')
       .set('X-Workspace-Id', workspaceId)
       .query({ stageId })
       .expect(400);
+
+    expect(invalidPipelineResponse.body.message).toBe(
+      'pipelineId must be a UUID in 8-4-4-4-12 hexadecimal format',
+    );
 
     await request(app.getHttpServer())
       .patch(`/pipelines/${pipelineId}/opportunities/not-a-uuid/stage`)
@@ -199,6 +203,28 @@ describe('OpportunitiesController', () => {
 
     expect(stageModel.findOne).not.toHaveBeenCalled();
     expect(opportunityModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('accepts deterministic database UUIDs without RFC version bits', async () => {
+    const seededPipelineId = 'd8e4deb6-0e18-529f-d377-b72520490a64';
+    const seededStageId = '0828f661-b889-3f78-0d8c-903029aa7f6c';
+    stageModel.findOne.mockResolvedValueOnce(null);
+
+    await request(app.getHttpServer())
+      .get(`/pipelines/${seededPipelineId}/opportunities`)
+      .set('X-Workspace-Id', workspaceId)
+      .query({ stageId: seededStageId })
+      .expect(404);
+
+    expect(stageModel.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          workspaceId,
+          pipelineId: seededPipelineId,
+          id: seededStageId,
+        },
+      }),
+    );
   });
 
   it('moves an opportunity and records the transition atomically', async () => {
@@ -277,7 +303,12 @@ describe('OpportunitiesController', () => {
       )
       .set('X-Workspace-Id', workspaceId)
       .send({ stageId: secondStageId })
-      .expect(404);
+      .expect(404)
+      .expect({
+        message: 'Destination stage not found in workspace and pipeline',
+        error: 'Not Found',
+        statusCode: 404,
+      });
 
     expect(opportunityModel.findOne).not.toHaveBeenCalled();
     expect(stageTransitionModel.create).not.toHaveBeenCalled();
