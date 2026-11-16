@@ -10,12 +10,22 @@ describe('validateEnvironment', () => {
       }),
     ).toEqual({
       port: 3000,
+      worker: {
+        chunkSize: 100,
+        leaseMs: 30_000,
+        maxAttempts: 8,
+        backoffBaseMs: 500,
+        backoffMaxMs: 60_000,
+        chunkPauseMs: 50,
+        pollMs: 500,
+      },
       postgres: {
         host: 'localhost',
         port: 5432,
         user: 'opportunity',
         password: 'local-only',
         database: 'opportunity_bulk_move',
+        poolMax: 9,
       },
     });
   });
