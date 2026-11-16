@@ -1,3 +1,5 @@
+import type { OpportunityStatus } from '../common/models/model.types';
+
 export { OPPORTUNITY_STATUSES } from '../common/models/model.types';
 export type { OpportunityStatus } from '../common/models/model.types';
 
@@ -6,6 +8,10 @@ export interface CreateOpportunityInput {
   value: number | string;
   status: OpportunityStatus;
   ownerId: string;
+  stageId: string;
+}
+
+export interface MoveOpportunityInput {
   stageId: string;
 }
 

@@ -6,6 +6,8 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { Opportunity } from '../common/models/opportunity.model';
 import { Stage } from '../common/models/stage.model';
+import { StageTransition } from '../common/models/stage-transition.model';
+import { WorkspaceMiddleware } from '../common/middleware/workspace.middleware';
 import { OpportunitiesController } from './opportunities.controller';
 import { OpportunitiesService } from './opportunities.service';
 
@@ -29,24 +31,42 @@ function opportunityRow(id: string, createdAt: string) {
     updatedAt: new Date(createdAt),
     cursorCreatedAt: createdAt,
   };
-  return {
+  const model = {
     ...row,
     get: (field: string) => row[field as keyof typeof row],
+    update: jest.fn(async (values: Partial<typeof row>) => {
+      Object.assign(row, values);
+      Object.assign(model, values);
+      return model;
+    }),
   };
+  return model;
 }
 
 describe('OpportunitiesController', () => {
   let app: INestApplication<App>;
   let sequelize: { transaction: jest.Mock };
   let stageModel: { findOne: jest.Mock };
-  let opportunityModel: { create: jest.Mock; findAll: jest.Mock };
+  let opportunityModel: {
+    create: jest.Mock;
+    findAll: jest.Mock;
+    findOne: jest.Mock;
+  };
+  let stageTransitionModel: { create: jest.Mock };
 
   beforeEach(async () => {
     sequelize = {
-      transaction: jest.fn(async (callback) => callback({ id: 'transaction' })),
+      transaction: jest.fn(async (callback) =>
+        callback({ id: 'transaction', LOCK: { UPDATE: 'UPDATE' } }),
+      ),
     };
     stageModel = { findOne: jest.fn() };
-    opportunityModel = { create: jest.fn(), findAll: jest.fn() };
+    opportunityModel = {
+      create: jest.fn(),
+      findAll: jest.fn(),
+      findOne: jest.fn(),
+    };
+    stageTransitionModel = { create: jest.fn() };
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OpportunitiesController],
       providers: [
@@ -54,10 +74,18 @@ describe('OpportunitiesController', () => {
         { provide: getConnectionToken(), useValue: sequelize },
         { provide: getModelToken(Stage), useValue: stageModel },
         { provide: getModelToken(Opportunity), useValue: opportunityModel },
+        {
+          provide: getModelToken(StageTransition),
+          useValue: stageTransitionModel,
+        },
       ],
     }).compile();
 
     app = module.createNestApplication();
+    const workspaceMiddleware = new WorkspaceMiddleware();
+    app.use((request, response, next) =>
+      workspaceMiddleware.use(request, response, next),
+    );
     await app.init();
   });
 
@@ -101,7 +129,7 @@ describe('OpportunitiesController', () => {
     expect(stageModel.findOne).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { workspaceId, pipelineId, id: stageId },
-        transaction: { id: 'transaction' },
+        transaction: expect.objectContaining({ id: 'transaction' }),
       }),
     );
     expect(opportunityModel.create).toHaveBeenCalledWith(
@@ -114,7 +142,7 @@ describe('OpportunitiesController', () => {
         status: 'open',
         ownerId: 'owner-1',
       },
-      { transaction: { id: 'transaction' } },
+      { transaction: expect.objectContaining({ id: 'transaction' }) },
     );
   });
 
@@ -144,6 +172,134 @@ describe('OpportunitiesController', () => {
 
     expect(stageModel.findOne).not.toHaveBeenCalled();
     expect(opportunityModel.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed workspace header before reaching the service', async () => {
+    await request(app.getHttpServer())
+      .get(`/pipelines/${pipelineId}/opportunities`)
+      .set('X-Workspace-Id', 'not-a-uuid')
+      .query({ stageId })
+      .expect(400);
+
+    expect(stageModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed route UUIDs before reaching the service', async () => {
+    await request(app.getHttpServer())
+      .get('/pipelines/not-a-uuid/opportunities')
+      .set('X-Workspace-Id', workspaceId)
+      .query({ stageId })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch(`/pipelines/${pipelineId}/opportunities/not-a-uuid/stage`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ stageId })
+      .expect(400);
+
+    expect(stageModel.findOne).not.toHaveBeenCalled();
+    expect(opportunityModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('moves an opportunity and records the transition atomically', async () => {
+    const opportunityId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const opportunity = opportunityRow(
+      opportunityId,
+      '2026-11-15T12:00:00.123456Z',
+    );
+    stageModel.findOne.mockResolvedValueOnce({ id: secondStageId });
+    opportunityModel.findOne.mockResolvedValueOnce(opportunity);
+    stageTransitionModel.create.mockResolvedValueOnce({});
+
+    const response = await request(app.getHttpServer())
+      .patch(`/pipelines/${pipelineId}/opportunities/${opportunityId}/stage`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ stageId: secondStageId })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: opportunityId,
+      workspaceId,
+      pipelineId,
+      stageId: secondStageId,
+      stageRevision: 1,
+    });
+    expect(stageModel.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId, pipelineId, id: secondStageId },
+        transaction: expect.any(Object),
+      }),
+    );
+    expect(opportunityModel.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId, pipelineId, id: opportunityId },
+        lock: 'UPDATE',
+      }),
+    );
+    expect(opportunity.update).toHaveBeenCalledWith(
+      { stageId: secondStageId, stageRevision: '1' },
+      { transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } } },
+    );
+    expect(stageTransitionModel.create).toHaveBeenCalledWith(
+      {
+        workspaceId,
+        pipelineId,
+        opportunityId,
+        fromStageId: stageId,
+        toStageId: secondStageId,
+      },
+      { transaction: { id: 'transaction', LOCK: { UPDATE: 'UPDATE' } } },
+    );
+  });
+
+  it('does not create a transition for a move to the current stage', async () => {
+    const opportunityId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    stageModel.findOne.mockResolvedValueOnce({ id: stageId });
+    opportunityModel.findOne.mockResolvedValueOnce(
+      opportunityRow(opportunityId, '2026-11-15T12:00:00.123456Z'),
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/pipelines/${pipelineId}/opportunities/${opportunityId}/stage`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ stageId })
+      .expect(200);
+
+    expect(stageTransitionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('does not move an opportunity to a stage outside the tenant pipeline', async () => {
+    stageModel.findOne.mockResolvedValueOnce(null);
+
+    await request(app.getHttpServer())
+      .patch(
+        `/pipelines/${pipelineId}/opportunities/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/stage`,
+      )
+      .set('X-Workspace-Id', workspaceId)
+      .send({ stageId: secondStageId })
+      .expect(404);
+
+    expect(opportunityModel.findOne).not.toHaveBeenCalled();
+    expect(stageTransitionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('returns not found when the opportunity is outside the tenant pipeline', async () => {
+    const opportunityId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    stageModel.findOne.mockResolvedValueOnce({ id: secondStageId });
+    opportunityModel.findOne.mockResolvedValueOnce(null);
+
+    await request(app.getHttpServer())
+      .patch(`/pipelines/${pipelineId}/opportunities/${opportunityId}/stage`)
+      .set('X-Workspace-Id', workspaceId)
+      .send({ stageId: secondStageId })
+      .expect(404);
+
+    expect(opportunityModel.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId, pipelineId, id: opportunityId },
+      }),
+    );
+    expect(stageTransitionModel.create).not.toHaveBeenCalled();
   });
 
   it('rejects stages outside the requested workspace and pipeline', async () => {
