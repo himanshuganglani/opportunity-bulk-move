@@ -27,10 +27,10 @@ and deterministic seed data before implementing the bulk-move worker:
   third-party logging framework.
 - Environment variables are validated at startup.
 
-The current API supports opportunity creation and paginated listing by stage.
-Deterministic small and performance-scale seed commands are available. Manual
-stage moves, bulk job submission/processing, and benchmarks are not implemented
-yet.
+The current API supports opportunity creation, paginated listing by stage, and
+manual stage moves with transition history. Deterministic small and
+performance-scale seed commands are available. Bulk job
+submission/processing and benchmarks are not implemented yet.
 
 ## Requirements
 
@@ -99,6 +99,20 @@ ordered by creation timestamp and ID; the default page size is 50 and the
 maximum is 100. Creation validates that the stage belongs to both the supplied
 workspace and pipeline. Listing validates the same relationship and scopes the
 opportunity query by workspace, pipeline, and stage.
+
+Move an opportunity with
+`PATCH /pipelines/:pipelineId/opportunities/:opportunityId/stage` and a JSON
+body containing the destination `stageId`. The opportunity update and
+`stage_transitions` insert commit together. Moving to its current stage is a
+no-op and does not create a transition.
+
+The opportunities middleware validates `X-Workspace-Id` once and stores its
+normalized UUID on the request. Controller pipes validate pipeline and
+opportunity path UUIDs; service input checks return HTTP 400 for invalid
+payloads, pagination values, cursors, or stage IDs. A stage or opportunity
+outside the requested workspace and pipeline returns HTTP 404. Unexpected
+database errors are not hidden: the transaction rolls back and Nest returns an
+HTTP 500 response.
 
 In another terminal, check liveness and readiness separately:
 

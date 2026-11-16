@@ -7,12 +7,14 @@ import { InjectConnection, InjectModel } from '@nestjs/sequelize';
 import { Op, Sequelize, col, literal } from 'sequelize';
 import { Opportunity } from '../common/models/opportunity.model';
 import { Stage } from '../common/models/stage.model';
+import { StageTransition } from '../common/models/stage-transition.model';
 import {
   OPPORTUNITY_STATUSES,
   type OpportunityStatus,
 } from '../common/models/model.types';
 import {
   type CreateOpportunityInput,
+  type MoveOpportunityInput,
   type OpportunityPage,
   type OpportunityRecord,
 } from './opportunities.types';
@@ -36,15 +38,15 @@ export class OpportunitiesService {
     @InjectModel(Stage) private readonly stageModel: typeof Stage,
     @InjectModel(Opportunity)
     private readonly opportunityModel: typeof Opportunity,
+    @InjectModel(StageTransition)
+    private readonly stageTransitionModel: typeof StageTransition,
   ) {}
 
   async create(
-    workspaceId: string | undefined,
+    workspaceId: string,
     pipelineId: string,
     input: CreateOpportunityInput,
   ): Promise<OpportunityRecord> {
-    const tenantId = this.requireUuid(workspaceId, 'X-Workspace-Id');
-    const tenantPipelineId = this.requireUuid(pipelineId, 'pipelineId');
     const name = this.requireText(input?.name, 'name', 255);
     const value = this.requireMoney(input?.value);
     const status = this.requireStatus(input?.status);
@@ -55,8 +57,8 @@ export class OpportunitiesService {
       const stage = await this.stageModel.findOne({
         attributes: ['id'],
         where: {
-          workspaceId: tenantId,
-          pipelineId: tenantPipelineId,
+          workspaceId,
+          pipelineId,
           id: stageId,
         },
         transaction,
@@ -68,8 +70,8 @@ export class OpportunitiesService {
 
       const opportunity = await this.opportunityModel.create(
         {
-          workspaceId: tenantId,
-          pipelineId: tenantPipelineId,
+          workspaceId,
+          pipelineId,
           stageId,
           name,
           value,
@@ -84,14 +86,12 @@ export class OpportunitiesService {
   }
 
   async listByStage(
-    workspaceId: string | undefined,
+    workspaceId: string,
     pipelineId: string,
     stageId: string | undefined,
     requestedLimit?: string,
     cursorToken?: string,
   ): Promise<OpportunityPage> {
-    const tenantId = this.requireUuid(workspaceId, 'X-Workspace-Id');
-    const tenantPipelineId = this.requireUuid(pipelineId, 'pipelineId');
     const stage = this.requireUuid(stageId, 'stageId');
     const limit = this.parseLimit(requestedLimit);
     const cursor = this.parseCursor(cursorToken);
@@ -99,8 +99,8 @@ export class OpportunitiesService {
     const existingStage = await this.stageModel.findOne({
       attributes: ['id'],
       where: {
-        workspaceId: tenantId,
-        pipelineId: tenantPipelineId,
+        workspaceId,
+        pipelineId,
         id: stage,
       },
     });
@@ -121,8 +121,8 @@ export class OpportunitiesService {
         ],
       },
       where: {
-        workspaceId: tenantId,
-        pipelineId: tenantPipelineId,
+        workspaceId,
+        pipelineId,
         stageId: stage,
         ...(cursor
           ? {
@@ -159,6 +159,69 @@ export class OpportunitiesService {
           : null,
       limit,
     };
+  }
+
+  async moveStage(
+    workspaceId: string,
+    pipelineId: string,
+    opportunityId: string,
+    input: MoveOpportunityInput,
+  ): Promise<OpportunityRecord> {
+    const destinationStageId = this.requireUuid(input?.stageId, 'stageId');
+
+    return this.sequelize.transaction(async (transaction) => {
+      const destinationStage = await this.stageModel.findOne({
+        attributes: ['id'],
+        where: {
+          workspaceId,
+          pipelineId,
+          id: destinationStageId,
+        },
+        transaction,
+      });
+
+      if (!destinationStage) {
+        throw new NotFoundException('Pipeline or stage not found in workspace');
+      }
+
+      const opportunity = await this.opportunityModel.findOne({
+        where: {
+          workspaceId,
+          pipelineId,
+          id: opportunityId,
+        },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!opportunity) {
+        throw new NotFoundException('Opportunity not found in workspace');
+      }
+
+      if (opportunity.stageId !== destinationStageId) {
+        const fromStageId = opportunity.stageId;
+        const stageRevision = (
+          BigInt(opportunity.stageRevision) + 1n
+        ).toString();
+
+        await opportunity.update(
+          { stageId: destinationStageId, stageRevision },
+          { transaction },
+        );
+        await this.stageTransitionModel.create(
+          {
+            workspaceId,
+            pipelineId,
+            opportunityId,
+            fromStageId,
+            toStageId: destinationStageId,
+          },
+          { transaction },
+        );
+      }
+
+      return this.toRecord(opportunity);
+    });
   }
 
   private requireUuid(value: string | undefined, field: string): string {
