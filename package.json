@@ -12,6 +12,7 @@
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "db:seed:small": "node database/seed.cjs small",
     "db:seed:large": "node database/seed.cjs large",
+    "benchmark": "node scripts/benchmark.cjs",
     "start:worker": "node dist/worker.js",
     "jobs:resume": "node dist/opportunities/bulk-moves/worker/resume-job.main.js",
     "setup:test": "npm install && if [ ! -f .env ]; then cp .env.example .env; fi && docker compose up -d --wait postgres && npm run db:migrate && npm run db:seed:small && npm run build && npm test -- --runInBand && npm run test:e2e -- --runInBand && npm run test:integration -- --runInBand",

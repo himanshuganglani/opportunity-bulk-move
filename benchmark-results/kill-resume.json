@@ -1,0 +1,74 @@
+{
+  "startedAt": "2026-11-16T08:29:38.756Z",
+  "completedAt": "2026-11-16T08:31:18.380Z",
+  "runId": "ae2b9d29-efc7-4d82-8a14-4d8b2ec8e642",
+  "mode": "kill-and-resume",
+  "jobId": "df780df1-085f-4486-b05a-5294bdf64f40",
+  "benchmarkOwnerId": "benchmark-ae2b9d29-efc7-4d82-8a14-4d8b2ec8e642",
+  "workspaceId": "574e3c74-ed85-87f0-e746-044b090bfd98",
+  "pipelineId": "d8e4deb6-0e18-529f-d377-b72520490a64",
+  "sourceStageId": "2fd1c913-5720-6fae-01ca-3820778dfc29",
+  "destinationStageId": "712a1f4f-ffc8-b55f-7e07-a8a9a6e2a846",
+  "differentWorkspace": {
+    "workspaceId": "ce5ea510-a96f-0d3f-9583-0c35a75c117c",
+    "pipelineId": "c0aa6281-c8a5-0891-772b-c5f23a271eb0",
+    "stageId": "46a048ba-26c4-df91-ce34-6fb8b6c93c94"
+  },
+  "requestedCrashAtCommittedItems": 30000,
+  "committedItemsAtCrash": 30600,
+  "crashToCompletionMs": 55275.26,
+  "snapshotSize": 50000,
+  "elapsedMs": 99627.18,
+  "throughputOpportunitiesPerSecond": 501.87,
+  "finalStatus": "completed",
+  "outcomes": {
+    "snapshot_count": 50000,
+    "moved_count": 50000,
+    "conflict_count": 0,
+    "already_at_destination_count": 0,
+    "benchmark_membership_mismatch": 0,
+    "moved_records_in_wrong_stage": 0,
+    "moved_records_without_exactly_one_transition": 0
+  },
+  "interactiveLatency": {
+    "concurrencyPerWorkspace": 2,
+    "methodology": "Closed-loop GET list workload: each client sends its next request immediately after the previous response; rates use total attempts over the shared load interval, and latency percentiles use successful responses only.",
+    "sameWorkspace": {
+      "requestCount": 92354,
+      "successfulRequests": 92354,
+      "failedRequests": 0,
+      "durationMs": 99630.07,
+      "requestsPerSecond": 926.97,
+      "p50Ms": 1.62,
+      "p95Ms": 2.81,
+      "p99Ms": 6.32,
+      "maxMs": 12268.75
+    },
+    "differentWorkspace": {
+      "requestCount": 92718,
+      "successfulRequests": 92718,
+      "failedRequests": 0,
+      "durationMs": 99630.07,
+      "requestsPerSecond": 930.62,
+      "p50Ms": 1.61,
+      "p95Ms": 2.78,
+      "p99Ms": 6.33,
+      "maxMs": 12268.66
+    }
+  },
+  "hardware": {
+    "platform": "Darwin 24.6.0",
+    "architecture": "arm64",
+    "cpuCount": 8,
+    "cpuModel": "Apple M1",
+    "totalMemoryBytes": 17179869184,
+    "nodeVersion": "v24.22.1",
+    "workerConfig": {
+      "chunkSize": "100",
+      "leaseMs": "30000",
+      "maxAttempts": "8",
+      "chunkPauseMs": "50",
+      "pollMs": "500"
+    }
+  }
+}

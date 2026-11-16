@@ -55,6 +55,11 @@ export class BulkMovesService {
       'destinationStageId',
     );
     const filters = this.normalizeFilters(input?.filters);
+    if (filters.stageId === destinationStageId) {
+      throw new BadRequestException(
+        'filters.stageId must differ from destinationStageId',
+      );
+    }
     const requestHash = this.hashRequest(
       workspaceId,
       tenantPipelineId,

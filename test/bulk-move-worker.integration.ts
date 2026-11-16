@@ -112,8 +112,9 @@ describe('Bulk move worker PostgreSQL integration', () => {
         'pipelines',
         'workspaces',
       ]) {
+        const workspaceColumn = table === 'workspaces' ? 'id' : 'workspace_id';
         await sequelize.query(
-          `DELETE FROM ${table} WHERE workspace_id = :workspaceId`,
+          `DELETE FROM ${table} WHERE ${workspaceColumn} = :workspaceId`,
           {
             replacements: { workspaceId: fixture.workspaceId },
             transaction,

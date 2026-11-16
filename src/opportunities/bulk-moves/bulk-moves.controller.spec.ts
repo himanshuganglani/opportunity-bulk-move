@@ -276,6 +276,20 @@ describe('BulkMovesController', () => {
     expect(sequelize.query).not.toHaveBeenCalled();
   });
 
+  it('rejects a source stage equal to the destination stage', async () => {
+    await request(app.getHttpServer())
+      .post(`/pipelines/${pipelineId}/opportunity-bulk-moves`)
+      .set('X-Workspace-Id', workspaceId)
+      .set('Idempotency-Key', 'same-source-and-destination')
+      .send({
+        destinationStageId,
+        filters: { stageId: destinationStageId },
+      })
+      .expect(400);
+
+    expect(sequelize.transaction).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when the destination stage is outside the workspace pipeline', async () => {
     stageModel.findOne.mockResolvedValueOnce(null);
 

@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-opportunity}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
-      POSTGRES_DB: ${POSTGRES_DB:-opportunity_bulk_move}
+      POSTGRES_DB: ${POSTGRES_DB:-opportunity_move_db}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -31,7 +31,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-opportunity}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
-      POSTGRES_DB: ${POSTGRES_DB:-opportunity_bulk_move}
+      POSTGRES_DB: ${POSTGRES_DB:-opportunity_move_db}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,7 +47,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-opportunity}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
-      POSTGRES_DB: ${POSTGRES_DB:-opportunity_bulk_move}
+      POSTGRES_DB: ${POSTGRES_DB:-opportunity_move_db}
     ports:
       - "${PORT:-3000}:3000"
     depends_on:
@@ -74,7 +74,7 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-opportunity}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
-      POSTGRES_DB: ${POSTGRES_DB:-opportunity_bulk_move}
+      POSTGRES_DB: ${POSTGRES_DB:-opportunity_move_db}
       POSTGRES_POOL_MAX: ${POSTGRES_POOL_MAX:-2}
       BULK_MOVE_CHUNK_SIZE: ${BULK_MOVE_CHUNK_SIZE:-100}
       BULK_MOVE_LEASE_MS: ${BULK_MOVE_LEASE_MS:-30000}
